@@ -2,6 +2,9 @@
 import streamlit as st
 import requests
 import os
+from gtts import gTTS
+import tempfile
+import base64
 
 # Configuração da página
 st.set_page_config(
@@ -31,17 +34,41 @@ if "messages" not in st.session_state:
         {"role": "assistant", "content": "E aí, meu parceiro! Fala com o Zé!"}
     ]
 
+# Função para falar
+def falar(texto):
+    try:
+        tts = gTTS(texto, lang='pt')
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            tts.save(f.name)
+            audio_file = f.name
+        return audio_file
+    except Exception as e:
+        st.error(f"Erro ao gerar áudio: {e}")
+        return None
+
 # Mostrar histórico
 for message in st.session_state.messages:
     if message["role"] == "assistant":
         st.markdown(f'<div class="response">👨‍💻 **Zé Pretinho:** {message["content"]}</div>', unsafe_allow_html=True)
+        # Gera e toca áudio
+        audio_file = falar(message["content"])
+        if audio_file:
+            with open(audio_file, "rb") as f:
+                audio_bytes = f.read()
+            audio_base64 = base64.b64encode(audio_bytes).decode()
+            audio_html = f"""
+            <audio autoplay controls style="width: 100%;">
+                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+            </audio>
+            """
+            st.markdown(audio_html, unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="user">🙂 **Você:** {message["content"]}</div>', unsafe_allow_html=True)
 
 # Função para chamar Hugging Face
 def gerar_resposta(pergunta):
     API_URL = "https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct"
-    headers = {"Authorization": "Bearer hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}  # ⚠️ COLE SEU TOKEN AQUI
+    headers = {"Authorization": f"Bearer {os.environ.get('HF_TOKEN')}"}
 
     prompt = f"<|user|>\n{pergunta}<|end|>\n<|assistant|>"
 
