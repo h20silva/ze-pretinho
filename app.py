@@ -37,7 +37,7 @@ if "messages" not in st.session_state:
 # Função para falar
 def falar(texto):
     try:
-        tts = gTTS(texto, lang='pt')
+        tts = gTTS(texto, lang='pt', slow=False)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
             tts.save(f.name)
             audio_file = f.name
@@ -58,7 +58,7 @@ for message in st.session_state.messages:
             audio_base64 = base64.b64encode(audio_bytes).decode()
             audio_html = f"""
             <audio autoplay controls style="width: 100%;">
-                <source src="data:audio/mp3;base64,{audio_base64}" type="audio/mp3">
+                <source src="audio/mp3;base64,{audio_base64}" type="audio/mp3">
             </audio>
             """
             st.markdown(audio_html, unsafe_allow_html=True)
@@ -67,24 +67,31 @@ for message in st.session_state.messages:
 
 # Função para chamar Hugging Face
 def gerar_resposta(pergunta):
-    API_URL = "https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct"
+    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
     headers = {"Authorization": f"Bearer {os.environ.get('HF_TOKEN')}"}
 
-    prompt = f"<|user|>\n{pergunta}<|end|>\n<|assistant|>"
+    payload = {
+        "inputs": pergunta,
+        "max_new_tokens": 128,
+        "temperature": 0.7
+    }
 
-    response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
-    
     try:
-        return response.json()[0]["generated_text"].split("<|assistant|>")[1].strip()
-    except:
-        return "Ih, meu irmão... o Zé tá com problema de conexão. Tenta de novo?"
+        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+        if response.status_code == 200:
+            return response.json()[0]["generated_text"].strip()
+        else:
+            return f"Erro {response.status_code}: não consegui pensar agora. Tenta de novo?"
+    except Exception as e:
+        return f"Zé Pretinho tá com problema: {str(e)}"
 
 # Entrada do usuário
 user_input = st.text_input("Digite sua mensagem (ou 'sair' para encerrar):", key="input")
 
 if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
-    resposta = gerar_resposta(user_input)
+    with st.spinner("Zé Pretinho tá pensando..."):
+        resposta = gerar_resposta(user_input)
     st.session_state.messages.append({"role": "assistant", "content": resposta})
     st.rerun()
 
